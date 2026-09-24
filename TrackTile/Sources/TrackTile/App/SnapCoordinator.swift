@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Observation
+import os
 import TrackTileCore
 
 /// Connects trackpad input to the outline preview and window moves.
@@ -203,7 +204,9 @@ final class SnapCoordinator {
     }
 
     private func begin(_ sample: GestureSample) {
-        switch WindowMover.windowUnderPointer() {
+        let lookup = WindowMover.windowUnderPointer()
+        Self.log.debug("Swipe began fingers=\(sample.fingerCount) start=\(Self.describe(sample.start)) window=\(Self.describe(lookup))")
+        switch lookup {
         case let .found(window):
             session = Session(window: window)
             if preferences.showOutline {
@@ -235,6 +238,12 @@ final class SnapCoordinator {
     }
 
     private func finish(_ sample: GestureSample) {
+        let zone = preferences.classifier.zone(for: sample)
+        Self.log.debug("""
+            Swipe ended start=\(Self.describe(sample.start)) end=\(Self.describe(sample.centroid)) \
+            velocity=(\(sample.velocity.dx, format: .fixed(precision: 2)), \(sample.velocity.dy, format: .fixed(precision: 2))) \
+            zone=\(zone?.rawValue ?? "none") session=\(self.session != nil)
+            """)
         guard let window = session?.window else { return }
         session = nil
         guard let zone = allowedZone(for: sample, window: window) else {
@@ -251,6 +260,20 @@ final class SnapCoordinator {
             overlay.hide()
         } else {
             reject(window.frame, on: window.screen)
+        }
+    }
+
+    private static let log = Logger(subsystem: "com.djui.tracktile", category: "gesture")
+
+    private static func describe(_ point: CGPoint) -> String {
+        String(format: "(%.2f, %.2f)", point.x, point.y)
+    }
+
+    private static func describe(_ lookup: WindowLookup) -> String {
+        switch lookup {
+        case let .found(window): "found resizable=\(window.isResizable)"
+        case .unsupported: "unsupported"
+        case .none: "none"
         }
     }
 
