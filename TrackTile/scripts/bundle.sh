@@ -26,6 +26,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_PATH/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp ../LICENSE "$APP/Contents/Resources/LICENSE"
 
 plist="$APP/Contents/Info.plist"
 if [[ -n "${VERSION:-}" ]]; then

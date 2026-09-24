@@ -160,3 +160,7 @@ All paths are relative to `TrackTile/`.
 Because TrackTile uses a private framework and the Accessibility API, it can't
 be sandboxed or distributed through the Mac App Store. Distribute it as a
 Developer ID build instead.
+
+## License
+
+TrackTile is available under the [MIT License](LICENSE).
