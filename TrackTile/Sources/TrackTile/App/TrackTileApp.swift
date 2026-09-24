@@ -68,15 +68,15 @@ private struct MenuContent: View {
         } else if !coordinator.multitouchAvailable {
             Divider()
             Text("Trackpad input unavailable")
-        } else if !coordinator.conflicts.isEmpty {
+        } else if !coordinator.activeConflicts.isEmpty {
             Divider()
             Button {
                 presenter.showSettings(tab: .gestures)
             } label: {
                 Label(
-                    coordinator.conflicts.count == 1
+                    coordinator.activeConflicts.count == 1
                         ? "1 conflicting macOS gesture…"
-                        : "\(coordinator.conflicts.count) conflicting macOS gestures…",
+                        : "\(coordinator.activeConflicts.count) conflicting macOS gestures…",
                     systemImage: "exclamationmark.triangle"
                 )
             }

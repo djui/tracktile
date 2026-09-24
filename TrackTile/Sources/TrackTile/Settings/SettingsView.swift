@@ -43,12 +43,12 @@ struct GeneralSettings: View {
                 } else {
                     LabeledContent("Multitouch devices", value: "\(coordinator.trackpadCount)")
                 }
-                if !coordinator.conflicts.isEmpty {
+                if !coordinator.activeConflicts.isEmpty {
                     LabeledContent {
                         Button("Show") { presenter.showSettings(tab: .gestures) }
                     } label: {
                         Label(
-                            "Conflicts with \(coordinator.conflicts.count) macOS gesture\(coordinator.conflicts.count == 1 ? "" : "s")",
+                            "Conflicts with \(coordinator.activeConflicts.count) macOS gesture\(coordinator.activeConflicts.count == 1 ? "" : "s")",
                             systemImage: "exclamationmark.triangle.fill"
                         )
                         .foregroundStyle(.orange)
@@ -78,7 +78,10 @@ struct GestureSettings: View {
     @AppStorage(PreferenceKey.fingerMode) private var fingerMode = Preferences.defaults.fingerMode
     @AppStorage(PreferenceKey.flickSensitivity) private var flickSensitivity = Preferences.defaults.flickSensitivity
 
+    @AppStorage(PreferenceKey.blockSystemSwipes) private var blockSystemSwipes = Preferences.defaults.blockSystemSwipes
+
     private var conflicts: [GestureConflict] { coordinator.conflicts }
+    private var hasSuppressible: Bool { conflicts.contains(where: \.suppressible) }
 
     var body: some View {
         Form {
@@ -117,28 +120,47 @@ struct GestureSettings: View {
                     Label("No conflicting gestures detected", systemImage: "checkmark.circle")
                         .foregroundStyle(.green)
                 } else {
-                    Text("macOS uses the same swipe for these gestures, so both would happen at once. Turn them off or move them to another finger count, or pick a different finger count for TrackTile.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let alternative = coordinator.conflictFreeAlternative {
+                    if !coordinator.activeConflicts.isEmpty {
+                        Text("macOS uses the same swipe for these gestures, so both would happen at once. Turn them off or move them to another finger count, or pick a different finger count for TrackTile.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if fingerMode.fingerCounts.contains(4) {
+                        Text("macOS keeps four-finger swipes for Mission Control and Spaces active even when you choose three fingers for them. Only turning the gesture Off frees four fingers.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !coordinator.activeConflicts.isEmpty, let alternative = coordinator.conflictFreeAlternative {
                         Button("Use \(alternative.title.lowercased()) instead (no conflicts)") {
                             fingerMode = alternative
                         }
                     }
                     ForEach(conflicts) { conflict in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(conflict.description, systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                            Text("Turn off or change in System Settings > \(conflict.location).")
-                                .font(.caption)
+                        if coordinator.isBlocked(conflict) {
+                            Label("\(conflict.description): blocked by TrackTile", systemImage: "hand.raised.slash")
                                 .foregroundStyle(.secondary)
+                        } else {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Label(conflict.description, systemImage: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text("Turn off or change in System Settings > \(conflict.location).")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                    }
+                }
+                if hasSuppressible || blockSystemSwipes {
+                    Toggle(isOn: $blockSystemSwipes) {
+                        Text("Block these macOS swipes while swiping with TrackTile (experimental)")
+                        Text("Swallows Mission Control, App Exposé and Spaces swipes that start with TrackTile's finger count. Three-finger drag and page swipes can't be blocked.")
                     }
                 }
                 HStack {
                     Button("Open Trackpad Settings") { GestureConflicts.openTrackpadSettings() }
-                    if conflicts.contains(where: { $0.id == "TrackpadThreeFingerDrag" }) {
+                    if conflicts.contains(where: { $0.id == "threeFingerDrag" }) {
                         Button("Open Pointer Control") { GestureConflicts.openAccessibilityPointerSettings() }
                     }
                     Spacer()
@@ -154,7 +176,7 @@ struct GestureSettings: View {
     }
 
     private func optionTitle(_ mode: FingerMode) -> String {
-        let count = GestureConflicts.detect(for: mode.fingerCounts).count
+        let count = coordinator.activeConflicts(for: mode).count
         switch count {
         case 0: return mode.title
         case 1: return "\(mode.title) (1 conflict)"

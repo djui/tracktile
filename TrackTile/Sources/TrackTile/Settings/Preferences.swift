@@ -47,6 +47,7 @@ enum PreferenceKey {
     static let centerFraction = "centerFraction"
     static let flickSensitivity = "flickSensitivity"
     static let showMenuBarIcon = "showMenuBarIcon"
+    static let blockSystemSwipes = "blockSystemSwipes"
     /// Finger mode and conflict IDs the user was last warned about.
     static let acknowledgedConflicts = "acknowledgedConflicts"
 }
@@ -62,6 +63,8 @@ struct Preferences: Equatable {
     /// 0 (needs a hard flick) to 1 (a light flick is enough).
     var flickSensitivity: Double
     var showMenuBarIcon: Bool
+    /// Experimental: swallow macOS Dock swipes that use TrackTile's finger count.
+    var blockSystemSwipes: Bool
 
     static let defaults = Preferences(
         enabled: true,
@@ -71,7 +74,8 @@ struct Preferences: Equatable {
         centerMode: .keepSize,
         centerFraction: 0.6,
         flickSensitivity: 0.5,
-        showMenuBarIcon: true
+        showMenuBarIcon: true,
+        blockSystemSwipes: false
     )
 
     static func registerDefaults(in store: UserDefaults = .standard) {
@@ -85,6 +89,7 @@ struct Preferences: Equatable {
             PreferenceKey.centerFraction: d.centerFraction,
             PreferenceKey.flickSensitivity: d.flickSensitivity,
             PreferenceKey.showMenuBarIcon: d.showMenuBarIcon,
+            PreferenceKey.blockSystemSwipes: d.blockSystemSwipes,
         ])
     }
 
@@ -97,7 +102,8 @@ struct Preferences: Equatable {
             centerMode: CenterMode(rawValue: store.string(forKey: PreferenceKey.centerMode) ?? "") ?? defaults.centerMode,
             centerFraction: store.double(forKey: PreferenceKey.centerFraction),
             flickSensitivity: store.double(forKey: PreferenceKey.flickSensitivity),
-            showMenuBarIcon: store.bool(forKey: PreferenceKey.showMenuBarIcon)
+            showMenuBarIcon: store.bool(forKey: PreferenceKey.showMenuBarIcon),
+            blockSystemSwipes: store.bool(forKey: PreferenceKey.blockSystemSwipes)
         )
     }
 

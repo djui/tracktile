@@ -155,6 +155,8 @@ private let contactCallback: CMTContactCallback = { device, touches, count, time
         }
     }
 
+    DockSwipeGuard.shared.setFingerCount(points.count)
+
     let previous = lastCounts.withLock { counts in
         defer { counts[deviceID] = points.count }
         return counts[deviceID] ?? 0

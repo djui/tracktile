@@ -13,6 +13,17 @@ final class SnapCoordinator {
     private(set) var lastZone: SnapZone?
     /// macOS gestures that use the configured finger count.
     private(set) var conflicts: [GestureConflict] = []
+    /// Whether the Dock swipe event tap is installed.
+    private(set) var isBlockingSystemSwipes = false
+
+    /// Conflicts that still need the user's attention.
+    var activeConflicts: [GestureConflict] {
+        conflicts.filter { !isBlocked($0) }
+    }
+
+    func isBlocked(_ conflict: GestureConflict) -> Bool {
+        conflict.suppressible && isBlockingSystemSwipes
+    }
 
     /// Called when new conflicts appear that the user hasn't been shown yet.
     @ObservationIgnored var onConflictsNeedAttention: (() -> Void)?
@@ -83,23 +94,29 @@ final class SnapCoordinator {
         if detected != conflicts {
             conflicts = detected
         }
-        guard !detected.isEmpty else {
+        let active = activeConflicts
+        guard !active.isEmpty else {
             UserDefaults.standard.removeObject(forKey: PreferenceKey.acknowledgedConflicts)
             return
         }
         // Accessibility onboarding comes first; warn once that's done.
         guard isTrusted else { return }
-        let signature = ([mode.rawValue] + detected.map(\.id).sorted()).joined(separator: ",")
+        let signature = ([mode.rawValue] + active.map(\.id).sorted()).joined(separator: ",")
         guard UserDefaults.standard.string(forKey: PreferenceKey.acknowledgedConflicts) != signature else { return }
         UserDefaults.standard.set(signature, forKey: PreferenceKey.acknowledgedConflicts)
         onConflictsNeedAttention?()
+    }
+
+    /// Conflicts `mode` would have, excluding those TrackTile blocks.
+    func activeConflicts(for mode: FingerMode) -> [GestureConflict] {
+        GestureConflicts.detect(for: mode.fingerCounts).filter { !isBlocked($0) }
     }
 
     /// A finger count that doesn't clash with any enabled macOS gesture.
     var conflictFreeAlternative: FingerMode? {
         [FingerMode.four, .three]
             .filter { $0 != preferences.fingerMode }
-            .first { GestureConflicts.detect(for: $0.fingerCounts).isEmpty }
+            .first { activeConflicts(for: $0).isEmpty }
     }
 
     /// Shows the system prompt and polls until the user grants access.
@@ -128,24 +145,35 @@ final class SnapCoordinator {
             touch.stop()
         }
         trackpadCount = touch.deviceCount
+
+        if isEnabled, isTrusted, preferences.blockSystemSwipes {
+            isBlockingSystemSwipes = DockSwipeGuard.shared.start()
+        } else {
+            DockSwipeGuard.shared.stop()
+            isBlockingSystemSwipes = false
+        }
     }
 
     private func reloadPreferences() {
         let updated = Preferences.load()
         guard updated != preferences else { return }
         let fingerModeChanged = updated.fingerMode != preferences.fingerMode
+        let blockingChanged = updated.blockSystemSwipes != preferences.blockSystemSwipes
         preferences = updated
         applyTrackerConfiguration()
-        if fingerModeChanged {
-            refreshConflicts()
-        }
         if isEnabled != updated.enabled {
             isEnabled = updated.enabled
+        } else if blockingChanged {
+            updateRunning()
+        }
+        if fingerModeChanged || blockingChanged {
+            refreshConflicts()
         }
     }
 
     private func applyTrackerConfiguration() {
         tracker.configuration.acceptedFingerCounts = preferences.fingerMode.fingerCounts
+        DockSwipeGuard.shared.setAcceptedFingerCounts(preferences.fingerMode.fingerCounts)
     }
 
     private func handle(_ frame: TouchFrame) {
